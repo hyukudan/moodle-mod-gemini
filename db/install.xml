@@ -36,5 +36,25 @@
         <KEY NAME="geminiid" TYPE="foreign" FIELDS="geminiid" REFTABLE="gemini" REFFIELDS="id"/>
       </KEYS>
     </TABLE>
+    <TABLE NAME="gemini_queue" COMMENT="Queue for background generation tasks">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="geminiid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="type" TYPE="char" LENGTH="50" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="prompt" TYPE="text" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="status" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="0=Pending, 1=Processing, 2=Done, -1=Error"/>
+        <FIELD NAME="errormessage" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="geminiid" TYPE="foreign" FIELDS="geminiid" REFTABLE="gemini" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="geminiid_status" UNIQUE="false" FIELDS="geminiid, status"/>
+      </INDEXES>
+    </TABLE>
   </TABLES>
 </XMLDB>

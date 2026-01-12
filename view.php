@@ -279,7 +279,8 @@ if ($content) {
             
             foreach ($data->cards as $index => $card) {
                 $display = ($index === 0) ? '' : 'display:none;';
-                echo '<div class="gemini-flashcard-container" id="card-'.$index.'" style="'.$display.'">';
+                // A11y: Add tabindex and role
+                echo '<div class="gemini-flashcard-container" id="card-'.$index.'" style="'.$display.'" tabindex="0" role="button" aria-label="Flashcard ' . ($index + 1) . '">';
                 echo '<div class="gemini-flashcard-inner">';
                 echo '<div class="gemini-flashcard-front">';
                 echo '<h4>' . s($card->front) . '</h4>';
@@ -308,8 +309,21 @@ if ($content) {
                 const counter = document.getElementById('card-counter');
 
                 // Flip logic
+                function flipCard(card) {
+                    card.classList.toggle('flipped');
+                }
+
                 containers.forEach(c => {
-                    c.addEventListener('click', () => c.classList.toggle('flipped'));
+                    // Click
+                    c.addEventListener('click', () => flipCard(c));
+                    
+                    // Keyboard (Enter/Space)
+                    c.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            flipCard(c);
+                        }
+                    });
                 });
 
                 // Navigation
@@ -475,6 +489,19 @@ if ($content) {
         echo '<div class="mb-3">';
         echo '<label class="form-label">' . $str_topic . '</label>';
         echo '<textarea class="form-control" name="prompt" rows="3" placeholder="' . $str_placeholder . '"></textarea>';
+        // Prompt Chips
+        echo '<div class="mt-2 small text-muted">';
+        echo '<span class="me-2">' . get_string('prompt_inspiration', 'mod_gemini') . '</span>';
+        $chips = [
+            get_string('prompt_explain_child', 'mod_gemini') => 'Explain [TOPIC] simply as if to a 10 year old.',
+            get_string('prompt_critical_analysis', 'mod_gemini') => 'Provide a critical analysis of [TOPIC], discussing pros and cons.',
+            get_string('prompt_real_world', 'mod_gemini') => 'Give 3 real-world case studies related to [TOPIC].',
+            get_string('prompt_timeline', 'mod_gemini') => 'Create a chronological timeline of key events for [TOPIC].'
+        ];
+        foreach ($chips as $label => $template) {
+            echo '<button type="button" class="btn btn-outline-secondary btn-sm me-1 mb-1 prompt-chip" data-template="'.s($template).'">' . $label . '</button>';
+        }
+        echo '</div>';
         echo '</div>';
         echo '<button type="button" class="btn btn-primary" id="btn-generate">' . $str_generate . '</button>';
         echo '</form>';
@@ -493,23 +520,91 @@ if ($content) {
                 const cards = document.querySelectorAll('.gemini-type-card');
                 const formContainer = document.getElementById('gemini-generation-form');
                 const typeInput = document.getElementById('input-type');
+                const promptInput = document.querySelector('textarea[name=\"prompt\"]');
                 const typeNameDisplay = document.getElementById('selected-type-name');
+                const statusDiv = document.getElementById('generation-status');
+
+                // Chip Logic
+                document.querySelectorAll('.prompt-chip').forEach(chip => {
+                    chip.addEventListener('click', function() {
+                        let current = promptInput.value.trim();
+                        // If empty or generic placeholder, replace. Else append.
+                        let template = this.getAttribute('data-template');
+                        if (current.length < 5) {
+                            promptInput.value = template;
+                        } else {
+                            // If user already typed 'Photosynthesis', try to replace [TOPIC] or just append
+                            if (template.includes('[TOPIC]')) {
+                                promptInput.value = template.replace('[TOPIC]', current);
+                            } else {
+                                promptInput.value = current + '\\n\\n' + template;
+                            }
+                        }
+                        promptInput.focus();
+                    });
+                });
+
+                // Polling for Task Status
+                const geminiId = " . $gemini->id . ";
+                const sesskey = M.cfg.sesskey;
+                
+                function checkStatus() {
+                    const fd = new FormData();
+                    fd.append('id', geminiId);
+                    fd.append('action', 'check_status');
+                    fd.append('sesskey', sesskey);
+
+                    fetch('ajax.php', { method: 'POST', body: fd })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Success logic
+                            if (data.data.has_newly_completed) {
+                                window.location.reload();
+                            }
+                            
+                            // Error Logic
+                            if (data.data.errors && data.data.errors.length > 0) {
+                                const err = data.data.errors[0];
+                                statusDiv.innerHTML = '<div class=\"alert alert-danger\"><strong>Generation Failed:</strong> ' + (err.errormessage || 'Unknown error') + '</div>';
+                                const btn = document.getElementById('btn-generate');
+                                if(btn) {
+                                     btn.disabled = false;
+                                     btn.innerHTML = '✨ Generate with Gemini';
+                                }
+                                return; // Stop processing other statuses
+                            }
+                            
+                            if (data.data.pending_count > 0) {
+                                let html = '<div class=\"alert alert-warning\"><div class=\"spinner-border spinner-border-sm me-2\"></div> Processing tasks in background:<ul>';
+                                data.data.tasks.forEach(t => {
+                                    html += '<li>' + t.type + ': ' + (t.status == 1 ? 'Processing...' : 'Queued') + '</li>';
+                                });
+                                html += '</ul><small>You can leave this page. We will notify you when done.</small></div>';
+                                statusDiv.innerHTML = html;
+                                statusDiv.style.display = 'block';
+                            } else if (statusDiv.innerHTML.includes('Processing')) {
+                                statusDiv.innerHTML = ''; // Clear if done but not newly completed (e.g. error)
+                            }
+                        }
+                    });
+                }
+
+                // Poll every 5 seconds
+                setInterval(checkStatus, 5000);
+                checkStatus(); // Initial check
 
                 cards.forEach(card => {
                     card.addEventListener('click', function() {
                         const type = this.getAttribute('data-type');
                         const name = this.querySelector('h5').innerText;
                         
-                        // Highlight selection
                         cards.forEach(c => c.classList.remove('border-primary', 'bg-light'));
                         this.classList.add('border-primary', 'bg-light');
 
-                        // Show form
                         typeInput.value = type;
                         typeNameDisplay.innerText = name;
                         formContainer.style.display = 'block';
-                        
-                        // Scroll to form
                         formContainer.scrollIntoView({behavior: 'smooth'});
                     });
                 });
@@ -518,21 +613,15 @@ if ($content) {
                     const prompt = document.querySelector('textarea[name=\"prompt\"]').value;
                     const type = document.getElementById('input-type').value;
                     const btn = this;
-                    const statusDiv = document.getElementById('generation-status');
                     
                     if (!prompt.trim()) {
                         alert('" . $str_enter_topic . "');
                         return;
                     }
 
-                    // UI Loading State
                     btn.disabled = true;
-                    btn.innerHTML = '<span class=\"spinner-border spinner-border-sm\" role=\"status\" aria-hidden=\"true\"></span> ' + '" . $str_generating . "';
-                    statusDiv.innerHTML = '<div class=\"alert alert-info\">' + '" . $str_contacting . "' + '</div>';
-
-                    // AJAX Request
-                    const sesskey = M.cfg.sesskey;
-                    const geminiId = <?php echo $gemini->id; ?>; // Instance ID
+                    btn.innerHTML = '" . $str_generating . "';
+                    statusDiv.innerHTML = '<div class=\"alert alert-info\">Enqueuing task...</div>';
 
                     const formData = new FormData();
                     formData.append('id', geminiId);
@@ -541,19 +630,16 @@ if ($content) {
                     formData.append('type', type);
                     formData.append('sesskey', sesskey);
 
-                    fetch('ajax.php', {
-                        method: 'POST',
-                        body: formData
-                    })
-                    .then(response => response.json())
+                    fetch('ajax.php', { method: 'POST', body: formData })
+                    .then(r => r.json())
                     .then(data => {
                         if (data.success) {
-                            statusDiv.innerHTML = '<div class=\"alert alert-success\">' + '" . $str_success . "' + '</div>';
-                            setTimeout(() => {
-                                window.location.reload();
-                            }, 1000);
+                            statusDiv.innerHTML = '<div class=\"alert alert-success\">Task Queued! The system is generating your content in the background.</div>';
+                            btn.disabled = false;
+                            btn.innerHTML = '" . $str_generate . "';
+                            checkStatus(); // Update UI immediately
                         } else {
-                            throw new Error(data.message || 'Unknown error');
+                            throw new Error(data.message);
                         }
                     })
                     .catch(error => {

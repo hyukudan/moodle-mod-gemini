@@ -16,7 +16,7 @@ $context = context_module::instance($cm->id);
 
 require_login($gemini->course, true, $cm);
 require_sesskey();
-require_capability('moodle/course:manageactivities', $context);
+require_capability('moodle/course:manageactivities', $context); // Default permission for most actions
 
 $response = ['success' => false, 'message' => '', 'data' => null];
 
@@ -26,137 +26,62 @@ try {
             throw new moodle_exception('missingparam');
         }
 
-        $client = new \mod_gemini\service\gemini_client();
-        $generated_content = '';
-        $mp3_data = null;
+        // 1. Create Queue Record
+        $queue = new stdClass();
+        $queue->geminiid = $gemini->id;
+        $queue->userid = $USER->id;
+        $queue->type = $type;
+        $queue->prompt = $prompt;
+        $queue->status = 0; // Pending
+        $queue->timecreated = time();
+        $queue->timemodified = time();
+        $queueid = $DB->insert_record('gemini_queue', $queue);
 
-        switch ($type) {
-            case 'presentation':
-                $generated_content = $client->generate_presentation($prompt);
-                break;
-            case 'flashcards':
-                $generated_content = $client->generate_flashcards($prompt);
-                break;
-            case 'summary':
-                $generated_content = $client->generate_summary($prompt);
-                break;
-            case 'audio':
-                // 1. Generate Script
-                $messages = [
-                    ['role' => 'system', 'content' => 'Write a short, engaging audio script explaining the topic. Use a conversational tone. Keep it under 2 minutes when spoken.'],
-                    ['role' => 'user', 'content' => $prompt]
-                ];
-                $generated_content = $client->generate_content($messages);
-
-                // 2. Generate Audio File (TTS)
-                try {
-                    $mp3_data = $client->generate_speech_mp3($generated_content);
-                } catch (Exception $e) {
-                    debugging('TTS Generation failed: ' . $e->getMessage());
-                }
-                break;
-            case 'quiz':
-                $json_content = $client->generate_quiz_questions($prompt);
-                $data = json_decode($json_content);
-                
-                if (!$data || !isset($data->questions)) {
-                    throw new moodle_exception('invalidjson', 'mod_gemini');
-                }
-
-                // Convert JSON to Moodle XML
-                $xml = '<?xml version="1.0" encoding="UTF-8"?>' . PHP_EOL;
-                $xml .= '<quiz>' . PHP_EOL;
-                $xml .= '  <question type="category">' . PHP_EOL;
-                $xml .= '    <category><text>$course$/Generated Quizzes/'.s($prompt).'</text></category>' . PHP_EOL;
-                $xml .= '  </question>' . PHP_EOL;
-
-                foreach ($data->questions as $q) {
-                    $xml .= '  <question type="multichoice">' . PHP_EOL;
-                    $xml .= '    <name><text>' . s($q->name) . '</text></name>' . PHP_EOL;
-                    $xml .= '    <questiontext format="html"><text><![CDATA[' . $q->questiontext . ']]></text></questiontext>' . PHP_EOL;
-                    $xml .= '    <defaultgrade>1.0000000</defaultgrade>' . PHP_EOL;
-                    $xml .= '    <penalty>0.3333333</penalty>' . PHP_EOL;
-                    $xml .= '    <hidden>0</hidden>' . PHP_EOL;
-                    $xml .= '    <single>true</single>' . PHP_EOL;
-                    $xml .= '    <shuffleanswers>true</shuffleanswers>' . PHP_EOL;
-                    $xml .= '    <answernumbering>abc</answernumbering>' . PHP_EOL;
-
-                    // Correct answer
-                    $xml .= '    <answer fraction="100" format="html">' . PHP_EOL;
-                    $xml .= '      <text><![CDATA[' . $q->correct_answer . ']]></text>' . PHP_EOL;
-                    $xml .= '      <feedback format="html"><text>Correct!</text></feedback>' . PHP_EOL;
-                    $xml .= '    </answer>' . PHP_EOL;
-
-                    // Incorrect answers
-                    foreach ($q->incorrect_answers as $bad) {
-                        $xml .= '    <answer fraction="0" format="html">' . PHP_EOL;
-                        $xml .= '      <text><![CDATA[' . $bad . ']]></text>' . PHP_EOL;
-                        $xml .= '      <feedback format="html"><text>Incorrect.</text></feedback>' . PHP_EOL;
-                        $xml .= '    </answer>' . PHP_EOL;
-                    }
-                    $xml .= '  </question>' . PHP_EOL;
-                }
-                $xml .= '</quiz>';
-                $generated_content = $xml;
-                break;
-
-            default:
-                throw new moodle_exception('invalidtype', 'mod_gemini');
-        }
-
-        // Save to database
-        $record = new stdClass();
-        $record->geminiid = $gemini->id;
-        $record->type = $type;
-        $record->content = $generated_content;
-        $record->timecreated = time();
-        $record->timemodified = time();
-
-        $existing = $DB->get_record('gemini_content', array('geminiid' => $gemini->id));
-        if ($existing) {
-            $record->id = $existing->id;
-            $DB->update_record('gemini_content', $record);
-            $content_id = $existing->id;
-        } else {
-            $content_id = $DB->insert_record('gemini_content', $record);
-        }
-
-        // Post-processing for Files
-        $fs = get_file_storage();
-        
-        if ($type === 'audio' && isset($mp3_data)) {
-             $fs->delete_area_files($context->id, 'mod_gemini', 'audio', $content_id);
-             $fileinfo = [
-                'contextid' => $context->id,
-                'component' => 'mod_gemini',
-                'filearea'  => 'audio',
-                'itemid'    => $content_id,
-                'filepath'  => '/',
-                'filename'  => 'generated_audio.mp3',
-                'timecreated' => time(),
-                'timemodified' => time(),
-             ];
-             $fs->create_file_from_string($fileinfo, $mp3_data);
-        }
-        elseif ($type === 'quiz') {
-             $fs->delete_area_files($context->id, 'mod_gemini', 'quiz', $content_id);
-             $fileinfo = [
-                'contextid' => $context->id,
-                'component' => 'mod_gemini',
-                'filearea'  => 'quiz',
-                'itemid'    => $content_id,
-                'filepath'  => '/',
-                'filename'  => 'quiz-export.xml',
-                'timecreated' => time(),
-                'timemodified' => time(),
-            ];
-            $fs->create_file_from_string($fileinfo, $generated_content);
-        }
+        // 2. Schedule Adhoc Task
+        $task = new \mod_gemini\task\generate_content();
+        $task->set_custom_data(['queueid' => $queueid]);
+        \core\task\manager::queue_adhoc_task($task);
 
         $response['success'] = true;
+        $response['message'] = 'Task queued';
+        $response['data'] = ['queueid' => $queueid];
+
+    } elseif ($action === 'check_status') {
+        // Return pending/processing tasks for this gemini instance
+        $tasks = $DB->get_records_select('gemini_queue', 
+            'geminiid = ? AND status IN (0, 1)', 
+            [$gemini->id],
+            'timecreated DESC'
+        );
+        
+        // Also check if we have any completed ones recently to notify frontend to reload
+        $completed = $DB->get_records_select('gemini_queue',
+             'geminiid = ? AND status = 2 AND timemodified > ?',
+             [$gemini->id, time() - 60], // Completed in last minute
+             'timecreated DESC',
+             '*',
+             0,
+             1
+        );
+        
+        // Check for Errors
+        $errors = $DB->get_records_select('gemini_queue',
+             'geminiid = ? AND status = -1 AND timemodified > ?',
+             [$gemini->id, time() - 60],
+             'timecreated DESC'
+        );
+
+        $response['success'] = true;
+        $response['data'] = [
+            'pending_count' => count($tasks),
+            'tasks' => array_values($tasks),
+            'has_newly_completed' => !empty($completed),
+            'errors' => array_values($errors)
+        ];
 
     } elseif ($action === 'reset') {
         $DB->delete_records('gemini_content', array('geminiid' => $gemini->id));
+        $DB->delete_records('gemini_queue', array('geminiid' => $gemini->id)); // Clear queue too
         $fs = get_file_storage();
         $fs->delete_area_files($context->id, 'mod_gemini', 'audio');
         $fs->delete_area_files($context->id, 'mod_gemini', 'quiz');
@@ -166,10 +91,6 @@ try {
         $content_text = required_param('content', PARAM_RAW);
         $existing = $DB->get_record('gemini_content', array('geminiid' => $gemini->id), '*', MUST_EXIST);
         
-        if (in_array($existing->type, ['presentation', 'flashcards', 'quiz'])) {
-            // Basic validation
-        }
-
         $record = new stdClass();
         $record->id = $existing->id;
         $record->content = $content_text;
@@ -178,40 +99,37 @@ try {
         $response['success'] = true;
 
     } elseif ($action === 'tools_rubric') {
-        // Teacher Tool: Generate Rubric
-        // We use the existing content/prompt as context
         $existing = $DB->get_record('gemini_content', array('geminiid' => $gemini->id));
-        $topic = $prompt; // Passed from JS, or we could derive it
-        
-        if (!$topic && $existing) {
-             // Try to infer topic from content snippet if prompt missing
-             $topic = "the generated content"; 
-        }
+        $topic = $prompt; 
+        if (!$topic && $existing) { $topic = "the generated content"; }
 
         $client = new \mod_gemini\service\gemini_client();
         $rubric_html = $client->generate_rubric($topic);
-        
         $response['success'] = true;
         $response['data'] = ['html' => $rubric_html];
         
     } elseif ($action === 'grade_completion') {
-        // Student Action: Mark activity as completed/graded
-        // Security check: Any student who can view can trigger this if they finish the task
-        require_capability('mod/gemini:view', $context);
-
-        $grade = new stdClass();
-        $grade->userid = $USER->id;
-        $grade->rawgrade = 100; // Full marks
-        $grade->feedback = 'Completed via Flashcards';
-        
-        gemini_update_grades($gemini, $USER->id, $grade);
-        
-        $response['success'] = true;
-        $response['message'] = 'Grade recorded';
+        // Allow students
+        // Note: The capability check at top is strict 'manageactivities', so we need to bypass for this action
+        // or refactor permissions. Since we already require login, we can do:
     }
-
 } catch (Exception $e) {
     $response['message'] = $e->getMessage();
+}
+
+// Special handling for grade_completion permission override
+if ($action === 'grade_completion') {
+    try {
+        require_capability('mod/gemini:view', $context);
+        $grade = new stdClass();
+        $grade->userid = $USER->id;
+        $grade->rawgrade = 100; 
+        gemini_update_grades($gemini, $USER->id, $grade);
+        $response['success'] = true;
+    } catch (Exception $e) {
+         $response['success'] = false;
+         $response['message'] = $e->getMessage();
+    }
 }
 
 header('Content-Type: application/json');

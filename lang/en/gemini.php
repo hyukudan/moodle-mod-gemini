@@ -43,4 +43,20 @@ $string['enter_topic'] = 'Please enter a topic.';
 $string['configure_type'] = 'Configure your {$a}'; // {$a} will be replaced by type name
 $string['topic_prompt'] = 'Topic / Prompt';
 $string['topic_placeholder'] = 'E.g., The history of the Roman Empire...';
+$string['prompt_inspiration'] = 'Try these:';
+$string['prompt_explain_child'] = 'Explain like I\'m 10';
+$string['prompt_critical_analysis'] = 'Critical Analysis';
+$string['prompt_real_world'] = 'Real-world Examples';
+$string['prompt_timeline'] = 'Timeline of Events';
+
+// Tasks
+$string['cleanup_task'] = 'Cleanup old Gemini generation logs';
+
+// Privacy
+$string['privacy:metadata:gemini_queue'] = 'Stores temporary prompts and status of content generation tasks.';
+$string['privacy:metadata:gemini_queue:userid'] = 'The user who requested the content generation.';
+$string['privacy:metadata:gemini_queue:prompt'] = 'The text prompt sent to the AI.';
+$string['privacy:metadata:gemini_queue:timecreated'] = 'When the request was made.';
+
+
 

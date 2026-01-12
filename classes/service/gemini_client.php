@@ -69,7 +69,7 @@ class gemini_client {
         // Add headers
         $options = [
             'CURLOPT_HTTPHEADER' => $headers,
-            'CURLOPT_TIMEOUT' => 60 // Wait up to 60s for generation
+            'CURLOPT_TIMEOUT' => 90 // Wait up to 90s for generation
         ];
 
         $response_json = $curl->post($url, json_encode($payload), $options);
@@ -194,7 +194,11 @@ class gemini_client {
 
     public function generate_summary($topic) {
         $system_prompt = "You are an expert summarizer. Provide a comprehensive summary of the topic. 
-        Use HTML formatting (<h3>, <p>, <ul>, <strong>) to structure the text clearly. Do not use Markdown, use HTML directly.";
+        Use HTML formatting (<h3>, <p>, <ul>, <strong>) to structure the text clearly. 
+        
+        CRITICAL: Identify 3-5 key complex terms or concepts in the text and wrap them in <abbr title=\"Short, clear definition of the term\">Term</abbr> tags. This will act as an integrated glossary for students.
+        
+        Do not use Markdown, return HTML only.";
 
         $messages = [
             ['role' => 'system', 'content' => $system_prompt],

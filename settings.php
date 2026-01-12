@@ -24,7 +24,7 @@ if ($ADMIN->fulltree) {
         'mod_gemini/model',
         get_string('settings_model', 'mod_gemini'),
         get_string('settings_model_desc', 'mod_gemini'),
-        'gemini-1.5-flash',
+        'gemini-3.0-flash',
         PARAM_TEXT
     ));
 
