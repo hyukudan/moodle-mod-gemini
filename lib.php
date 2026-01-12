@@ -1,4 +1,27 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * Library functions for mod_gemini
+ *
+ * @package    mod_gemini
+ * @copyright  2026 Sergio C
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
 defined('MOODLE_INTERNAL') || die();
 
 /**
@@ -54,6 +77,12 @@ function gemini_delete_instance($id) {
 
     // Delete associated content first.
     $DB->delete_records('gemini_content', array('geminiid' => $gemini->id));
+
+    // Delete queue records.
+    $DB->delete_records('gemini_queue', array('geminiid' => $gemini->id));
+
+    // Delete grade item.
+    gemini_grade_item_delete($gemini);
 
     // Delete the instance.
     $DB->delete_records('gemini', array('id' => $gemini->id));
@@ -187,5 +216,18 @@ function gemini_grade_item_update($gemini, $grades = null) {
     }
 
     return grade_update('mod/gemini', $gemini->course, 'mod', 'gemini', $gemini->id, 0, $grades, $params);
+}
+
+/**
+ * Delete grade item for this activity.
+ *
+ * @param object $gemini The gemini instance.
+ * @return int 0 if ok, error code otherwise.
+ */
+function gemini_grade_item_delete($gemini) {
+    global $CFG;
+    require_once($CFG->libdir . '/gradelib.php');
+
+    return grade_update('mod/gemini', $gemini->course, 'mod', 'gemini', $gemini->id, 0, null, ['deleted' => 1]);
 }
 

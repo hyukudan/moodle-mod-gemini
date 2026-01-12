@@ -20,10 +20,83 @@ class gemini_client {
         $this->baseurl = get_config('mod_gemini', 'baseurl');
         $this->model = get_config('mod_gemini', 'model');
         $this->temperature = (float)get_config('mod_gemini', 'temperature');
-        
-        // Ensure base URL ends with slash
+
+        // Ensure base URL ends with slash.
         if (substr($this->baseurl, -1) !== '/') {
             $this->baseurl .= '/';
+        }
+
+        // SSRF Protection: Validate URL is safe.
+        $this->validate_url($this->baseurl);
+    }
+
+    /**
+     * Validates a URL to prevent SSRF attacks.
+     * Blocks both IPv4 and IPv6 private/internal IP ranges.
+     *
+     * @param string $url The URL to validate.
+     * @throws \moodle_exception If the URL is unsafe.
+     */
+    private function validate_url($url) {
+        $parsed = parse_url($url);
+
+        if (!$parsed || !isset($parsed['host'])) {
+            debugging('Invalid URL format: ' . $url, DEBUG_DEVELOPER);
+            throw new \moodle_exception('invalidurl', 'mod_gemini');
+        }
+
+        $host = $parsed['host'];
+
+        // Block private/internal IP ranges (SSRF protection for both IPv4 and IPv6).
+        // First, try to resolve the hostname to an IP address.
+        // We need to check both IPv4 and IPv6 addresses.
+
+        // Get all IP addresses for the host (including IPv6).
+        $ips = [];
+
+        // Try IPv4 resolution.
+        $ipv4 = gethostbyname($host);
+        if ($ipv4 !== $host) {
+            $ips[] = $ipv4;
+        }
+
+        // Try IPv6 resolution using dns_get_record.
+        $dns_records = @dns_get_record($host, DNS_AAAA);
+        if ($dns_records !== false) {
+            foreach ($dns_records as $record) {
+                if (isset($record['ipv6'])) {
+                    $ips[] = $record['ipv6'];
+                }
+            }
+        }
+
+        // If host is already an IP address (IPv4 or IPv6), validate it directly.
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            $ips[] = $host;
+        }
+
+        // Validate each resolved IP address.
+        foreach ($ips as $ip) {
+            // Use filter_var with flags to block private and reserved IP ranges.
+            // This automatically handles:
+            // IPv4: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, etc.
+            // IPv6: ::1 (localhost), fe80::/10 (link-local), fc00::/7 (unique local), fd00::/8 (private), etc.
+            $is_valid_public_ip = filter_var(
+                $ip,
+                FILTER_VALIDATE_IP,
+                FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+            );
+
+            if ($is_valid_public_ip === false) {
+                debugging('SSRF blocked: URL resolves to private/internal IP address (' . $ip . ')', DEBUG_DEVELOPER);
+                throw new \moodle_exception('ssrfblocked', 'mod_gemini');
+            }
+        }
+
+        // Optional: Require HTTPS for production.
+        if (isset($parsed['scheme']) && $parsed['scheme'] !== 'https' && $parsed['scheme'] !== 'http') {
+            debugging('Invalid URL scheme: ' . $parsed['scheme'], DEBUG_DEVELOPER);
+            throw new \moodle_exception('invalidurl', 'mod_gemini');
         }
     }
 
@@ -77,11 +150,14 @@ class gemini_client {
 
         if ($info['http_code'] !== 200) {
             // Log error for debugging
-            debugging('Gemini API Error: ' . $response_json, DEBUG_DEVELOPER);
-            throw new \moodle_exception('apierror', 'mod_gemini', '', $info['http_code'] . ': ' . $response_json);
+            debugging('Gemini API Error (HTTP ' . $info['http_code'] . '): ' . $response_json, DEBUG_DEVELOPER);
+            throw new \moodle_exception('apierror', 'mod_gemini', '', $info['http_code']);
         }
 
         $response = json_decode($response_json, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new \moodle_exception('invalidjson', 'mod_gemini');
+        }
 
         if (isset($response['choices'][0]['message']['content'])) {
             return $response['choices'][0]['message']['content'];
@@ -220,15 +296,18 @@ class gemini_client {
 
         $tts_url = get_config('mod_gemini', 'ttsurl');
         if (empty($tts_url)) {
-            // Fallback: try to construct it from baseurl
-            // Remove 'chat/completions' if present, or just append 'audio/speech'
+            // Fallback: try to construct it from baseurl.
+            // Remove 'chat/completions' if present, or just append 'audio/speech'.
             $base = str_replace('chat/completions', '', $this->baseurl);
-            // Ensure trailing slash
+            // Ensure trailing slash.
             if (substr($base, -1) !== '/') {
                 $base .= '/';
             }
             $tts_url = $base . 'audio/speech';
         }
+
+        // SSRF Protection: Validate TTS URL.
+        $this->validate_url($tts_url);
 
         $model = get_config('mod_gemini', 'ttsmodel') ?: 'tts-1';
         $voice = get_config('mod_gemini', 'ttsvoice') ?: 'alloy';
@@ -259,8 +338,8 @@ class gemini_client {
 
         if ($info['http_code'] !== 200) {
             // If it's text error, try to read it
-            debugging('TTS API Error: ' . substr($response, 0, 200), DEBUG_DEVELOPER);
-            throw new \moodle_exception('apierror', 'mod_gemini', '', 'TTS Error ' . $info['http_code']);
+            debugging('TTS API Error (HTTP ' . $info['http_code'] . '): ' . substr($response, 0, 200), DEBUG_DEVELOPER);
+            throw new \moodle_exception('apierror', 'mod_gemini', '', $info['http_code']);
         }
 
         return $response; // Binary data

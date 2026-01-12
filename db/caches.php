@@ -15,31 +15,26 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Scheduled task to cleanup old queue records for mod_gemini
+ * Cache definitions for mod_gemini.
  *
  * @package    mod_gemini
  * @copyright  2026 Sergio C
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-namespace mod_gemini\task;
-
 defined('MOODLE_INTERNAL') || die();
 
-class cleanup_task extends \core\task\scheduled_task {
-
-    public function get_name() {
-        return get_string('cleanup_task', 'mod_gemini');
-    }
-
-    public function execute() {
-        global $DB;
-        
-        // Delete queue records older than 30 days
-        $cutoff = time() - (30 * 24 * 60 * 60);
-        $DB->delete_records_select('gemini_queue', 'timecreated < ?', [$cutoff]);
-        
-        mtrace("Cleaned up old Gemini queue records.");
-    }
-}
-
+$definitions = [
+    'content' => [
+        'mode' => cache_store::MODE_APPLICATION,
+        'simplekeys' => true,
+        'simpledata' => false,
+        'ttl' => 3600, // 1 hour.
+    ],
+    'ratelimit' => [
+        'mode' => cache_store::MODE_APPLICATION,
+        'simplekeys' => true,
+        'simpledata' => true,
+        'ttl' => 3600, // 1 hour.
+    ],
+];

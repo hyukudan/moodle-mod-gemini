@@ -1,4 +1,27 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * View page for mod_gemini.
+ *
+ * @package    mod_gemini
+ * @copyright  2026 Sergio C
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
 require_once('../../config.php');
 require_once($CFG->dirroot.'/mod/gemini/lib.php');
 
@@ -27,8 +50,8 @@ $PAGE->set_url('/mod/gemini/view.php', array('id' => $cm->id));
 $PAGE->set_title(format_string($gemini->name));
 $PAGE->set_heading(format_string($course->fullname));
 
-// Check if content has already been generated.
-$content = $DB->get_record('gemini_content', array('geminiid' => $gemini->id));
+// Check if content has already been generated (get current version).
+$content = $DB->get_record('gemini_content', array('geminiid' => $gemini->id, 'is_current' => 1));
 
 echo $OUTPUT->header();
 
@@ -39,6 +62,7 @@ if ($content) {
         echo '<div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">';
         echo '<strong>' . get_string('teacher_controls', 'mod_gemini') . '</strong>';
         echo '<div>';
+        echo '<button class="btn btn-sm btn-info me-2" id="btn-version-history">' . get_string('version_history', 'mod_gemini') . '</button>';
         echo '<button class="btn btn-sm btn-dark me-2" id="btn-tools-rubric">' . get_string('generate_rubric', 'mod_gemini') . '</button>';
         echo '<button class="btn btn-sm btn-light me-2" id="btn-edit-content">' . get_string('edit_content', 'mod_gemini') . '</button>';
         echo '<button class="btn btn-sm btn-danger" id="btn-regenerate">' . get_string('regenerate', 'mod_gemini') . '</button>';
@@ -94,9 +118,176 @@ if ($content) {
           </div>
         </div>';
 
+        // Version History Modal
+        echo '
+        <div class="modal fade" id="versionModal" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+              <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">' . get_string('version_history', 'mod_gemini') . '</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body">
+                <div id="version-loading" class="text-center p-3">
+                    <div class="spinner-border text-primary" role="status"></div><br>' . get_string('loading_versions', 'mod_gemini') . '
+                </div>
+                <div id="version-list" style="display:none;">
+                    <p class="text-muted small">' . get_string('version_history_help', 'mod_gemini') . '</p>
+                    <div id="version-items"></div>
+                </div>
+                <div id="version-error" class="alert alert-danger" style="display:none;"></div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">' . get_string('close', 'mod_gemini') . '</button>
+              </div>
+            </div>
+          </div>
+        </div>';
+
         // Control Panel JS
         echo "<script>
         document.addEventListener('DOMContentLoaded', function() {
+            // VERSION HISTORY
+            const btnVersionHistory = document.getElementById('btn-version-history');
+            const versionModalEl = document.getElementById('versionModal');
+            const versionModal = new bootstrap.Modal(versionModalEl);
+            const versionLoading = document.getElementById('version-loading');
+            const versionList = document.getElementById('version-list');
+            const versionItems = document.getElementById('version-items');
+            const versionError = document.getElementById('version-error');
+
+            if(btnVersionHistory) {
+                btnVersionHistory.addEventListener('click', function() {
+                    versionModal.show();
+                    loadVersionHistory();
+                });
+            }
+
+            function loadVersionHistory() {
+                versionLoading.style.display = 'block';
+                versionList.style.display = 'none';
+                versionError.style.display = 'none';
+                versionItems.innerHTML = '';
+
+                const formData = new FormData();
+                formData.append('id', " . $gemini->id . ");
+                formData.append('action', 'get_versions');
+                formData.append('sesskey', M.cfg.sesskey);
+
+                fetch('ajax.php', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(d => {
+                    versionLoading.style.display = 'none';
+                    if(d.success && d.data && d.data.versions) {
+                        versionList.style.display = 'block';
+                        displayVersions(d.data.versions);
+                    } else {
+                        versionError.textContent = d.message || 'Failed to load versions';
+                        versionError.style.display = 'block';
+                    }
+                })
+                .catch(e => {
+                    versionLoading.style.display = 'none';
+                    versionError.textContent = 'Network error: ' + e.message;
+                    versionError.style.display = 'block';
+                });
+            }
+
+            function displayVersions(versions) {
+                versionItems.innerHTML = '';
+
+                if(versions.length === 0) {
+                    versionItems.innerHTML = '<p class=\"text-muted\">" . get_string('no_versions', 'mod_gemini') . "</p>';
+                    return;
+                }
+
+                versions.forEach(function(v) {
+                    const card = document.createElement('div');
+                    card.className = 'card mb-3 ' + (v.is_current ? 'border-success' : '');
+
+                    const cardHeader = document.createElement('div');
+                    cardHeader.className = 'card-header d-flex justify-content-between align-items-center ' + (v.is_current ? 'bg-success text-white' : 'bg-light');
+
+                    const headerLeft = document.createElement('div');
+                    const versionTitle = document.createElement('strong');
+                    versionTitle.textContent = '" . get_string('version', 'mod_gemini') . " ' + v.version;
+                    if(v.is_current) {
+                        const currentBadge = document.createElement('span');
+                        currentBadge.className = 'badge bg-light text-success ms-2';
+                        currentBadge.textContent = '" . get_string('current', 'mod_gemini') . "';
+                        versionTitle.appendChild(currentBadge);
+                    }
+                    headerLeft.appendChild(versionTitle);
+
+                    const dateSpan = document.createElement('small');
+                    dateSpan.className = 'ms-3 ' + (v.is_current ? 'text-white' : 'text-muted');
+                    dateSpan.textContent = v.date_created;
+                    headerLeft.appendChild(dateSpan);
+
+                    cardHeader.appendChild(headerLeft);
+
+                    if(!v.is_current) {
+                        const restoreBtn = document.createElement('button');
+                        restoreBtn.className = 'btn btn-sm btn-primary';
+                        restoreBtn.textContent = '" . get_string('restore', 'mod_gemini') . "';
+                        restoreBtn.onclick = function() {
+                            restoreVersion(v.id);
+                        };
+                        cardHeader.appendChild(restoreBtn);
+                    }
+
+                    card.appendChild(cardHeader);
+
+                    const cardBody = document.createElement('div');
+                    cardBody.className = 'card-body';
+
+                    if(v.prompt) {
+                        const promptLabel = document.createElement('strong');
+                        promptLabel.textContent = '" . get_string('prompt', 'mod_gemini') . ": ';
+                        cardBody.appendChild(promptLabel);
+
+                        const promptText = document.createElement('p');
+                        promptText.className = 'text-muted';
+                        promptText.textContent = v.prompt;
+                        cardBody.appendChild(promptText);
+                    }
+
+                    const typeLabel = document.createElement('small');
+                    typeLabel.className = 'text-muted';
+                    typeLabel.textContent = '" . get_string('content_type', 'mod_gemini') . ": ' + v.type;
+                    cardBody.appendChild(typeLabel);
+
+                    card.appendChild(cardBody);
+                    versionItems.appendChild(card);
+                });
+            }
+
+            function restoreVersion(versionId) {
+                if(!confirm('" . get_string('restore_confirm', 'mod_gemini') . "')) {
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('id', " . $gemini->id . ");
+                formData.append('action', 'restore_version');
+                formData.append('version_id', versionId);
+                formData.append('sesskey', M.cfg.sesskey);
+
+                fetch('ajax.php', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(d => {
+                    if(d.success) {
+                        alert('" . get_string('restore_success', 'mod_gemini') . "');
+                        window.location.reload();
+                    } else {
+                        alert('" . get_string('error_prefix', 'mod_gemini') . "' + (d.message || 'Unknown error'));
+                    }
+                })
+                .catch(e => {
+                    alert('" . get_string('error_prefix', 'mod_gemini') . "' + e.message);
+                });
+            }
+
             // TOOLS
             const btnTools = document.getElementById('btn-tools-rubric');
             const toolsModalEl = document.getElementById('toolsModal');
@@ -132,7 +323,11 @@ if ($content) {
                              toolOutput.innerHTML = d.data.html;
                              toolOutput.style.display = 'block';
                          } else {
-                             toolOutput.innerHTML = '<div class=\"alert alert-danger\">Error: '+d.message+'</div>';
+                             const errorDiv = document.createElement('div');
+                             errorDiv.className = 'alert alert-danger';
+                             errorDiv.textContent = 'Error: ' + d.message;
+                             toolOutput.innerHTML = '';
+                             toolOutput.appendChild(errorDiv);
                              toolOutput.style.display = 'block';
                          }
                      });
@@ -222,6 +417,9 @@ if ($content) {
     switch ($content->type) {
         case 'presentation':
             $data = json_decode($content->content);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                $data = new stdClass();
+            }
             if (!$data || !isset($data->slides)) {
                 echo '<div class="alert alert-danger">Error decoding presentation data.</div>';
                 break;
@@ -241,7 +439,7 @@ if ($content) {
                     echo '<div class="text-center mb-4"><img src="'.$img_url.'" class="img-fluid rounded shadow-sm" alt="Slide Image" style="max-height: 300px; object-fit: cover;"></div>';
                 }
 
-                echo '<div class="slide-content fs-5">' . $slide->content . '</div>';
+                echo '<div class="slide-content fs-5">' . format_text($slide->content, FORMAT_HTML, ['context' => $context]) . '</div>';
                 if (!empty($slide->notes)) {
                     echo '<div class="mt-5 p-3 bg-light border-start border-4 border-info small text-muted"><strong>Notes:</strong> ' . s($slide->notes) . '</div>';
                 }
@@ -270,6 +468,9 @@ if ($content) {
             
         case 'flashcards':
             $data = json_decode($content->content);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                $data = new stdClass();
+            }
             if (!$data || !isset($data->cards)) {
                 echo '<div class="alert alert-danger">Error decoding flashcards data.</div>';
                 break;
@@ -445,6 +646,265 @@ if ($content) {
     }
     echo '</div>';
 
+    // --- INTERACTIVE CHAT PANEL ---
+    // Available for all users who can view the content
+    $str_chat_title = get_string('chat_panel_title', 'mod_gemini');
+    $str_chat_placeholder = get_string('chat_placeholder', 'mod_gemini');
+    $str_chat_send = get_string('chat_send', 'mod_gemini');
+    $str_chat_thinking = get_string('chat_thinking', 'mod_gemini');
+    $str_chat_welcome = get_string('chat_welcome', 'mod_gemini');
+    $str_chat_clear = get_string('chat_clear', 'mod_gemini');
+    $str_chat_error = get_string('chat_error', 'mod_gemini');
+
+    echo '<div class="gemini-chat-container mt-4">';
+    echo '<div class="card border-info">';
+    echo '<div class="card-header bg-info text-white d-flex justify-content-between align-items-center"
+          style="cursor: pointer;"
+          data-bs-toggle="collapse"
+          data-bs-target="#chatPanel"
+          aria-expanded="false"
+          aria-controls="chatPanel">';
+    echo '<span><strong>' . $str_chat_title . '</strong></span>';
+    echo '<span class="chat-toggle-icon">&#9660;</span>';
+    echo '</div>';
+
+    echo '<div class="collapse" id="chatPanel">';
+    echo '<div class="card-body">';
+
+    // Chat messages area
+    echo '<div id="chat-messages" class="border rounded p-3 mb-3 bg-light" style="height: 300px; overflow-y: auto;">';
+    echo '<div class="chat-message assistant-message">';
+    echo '<div class="d-flex align-items-start">';
+    echo '<span class="badge bg-info me-2">AI</span>';
+    echo '<div class="message-content">' . s($str_chat_welcome) . '</div>';
+    echo '</div>';
+    echo '</div>';
+    echo '</div>';
+
+    // Chat input area
+    echo '<div class="input-group">';
+    echo '<input type="text" class="form-control" id="chat-input" placeholder="' . s($str_chat_placeholder) . '" maxlength="1000">';
+    echo '<button class="btn btn-info" type="button" id="chat-send-btn">' . $str_chat_send . '</button>';
+    echo '</div>';
+
+    // Clear chat button
+    echo '<div class="mt-2 text-end">';
+    echo '<button class="btn btn-sm btn-outline-secondary" id="chat-clear-btn">' . $str_chat_clear . '</button>';
+    echo '</div>';
+
+    echo '</div>'; // card-body
+    echo '</div>'; // collapse
+    echo '</div>'; // card
+    echo '</div>'; // gemini-chat-container
+
+    // Chat CSS
+    echo '<style>
+    .gemini-chat-container .chat-message {
+        margin-bottom: 12px;
+        animation: fadeIn 0.3s ease-in;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .gemini-chat-container .user-message .message-content {
+        background-color: #e3f2fd;
+        padding: 8px 12px;
+        border-radius: 12px;
+        display: inline-block;
+        max-width: 80%;
+    }
+    .gemini-chat-container .assistant-message .message-content {
+        background-color: #f5f5f5;
+        padding: 8px 12px;
+        border-radius: 12px;
+        display: inline-block;
+        max-width: 80%;
+    }
+    .gemini-chat-container .chat-toggle-icon {
+        transition: transform 0.3s ease;
+    }
+    .gemini-chat-container [aria-expanded="true"] .chat-toggle-icon {
+        transform: rotate(180deg);
+    }
+    .gemini-chat-container .typing-indicator {
+        display: flex;
+        gap: 4px;
+        padding: 8px 12px;
+    }
+    .gemini-chat-container .typing-indicator span {
+        width: 8px;
+        height: 8px;
+        background-color: #17a2b8;
+        border-radius: 50%;
+        animation: bounce 1.4s infinite ease-in-out both;
+    }
+    .gemini-chat-container .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+    .gemini-chat-container .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+    @keyframes bounce {
+        0%, 80%, 100% { transform: scale(0); }
+        40% { transform: scale(1); }
+    }
+    </style>';
+
+    // Chat JavaScript
+    echo "<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const chatMessages = document.getElementById('chat-messages');
+        const chatInput = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('chat-send-btn');
+        const clearBtn = document.getElementById('chat-clear-btn');
+        const geminiId = " . $gemini->id . ";
+        const sesskey = M.cfg.sesskey;
+        const thinkingMsg = '" . addslashes($str_chat_thinking) . "';
+        const errorMsg = '" . addslashes($str_chat_error) . "';
+        const welcomeMsg = '" . addslashes($str_chat_welcome) . "';
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Add message to chat
+        function addMessage(content, isUser) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'chat-message ' + (isUser ? 'user-message text-end' : 'assistant-message');
+
+            const inner = document.createElement('div');
+            inner.className = 'd-flex align-items-start' + (isUser ? ' justify-content-end' : '');
+
+            if (!isUser) {
+                const badge = document.createElement('span');
+                badge.className = 'badge bg-info me-2';
+                badge.textContent = 'AI';
+                inner.appendChild(badge);
+            }
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = content;
+            inner.appendChild(contentDiv);
+
+            if (isUser) {
+                const badge = document.createElement('span');
+                badge.className = 'badge bg-primary ms-2';
+                badge.textContent = 'You';
+                inner.appendChild(badge);
+            }
+
+            msgDiv.appendChild(inner);
+            chatMessages.appendChild(msgDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            return msgDiv;
+        }
+
+        // Add typing indicator
+        function addTypingIndicator() {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'chat-message assistant-message';
+            msgDiv.id = 'typing-indicator';
+
+            const inner = document.createElement('div');
+            inner.className = 'd-flex align-items-start';
+
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-info me-2';
+            badge.textContent = 'AI';
+            inner.appendChild(badge);
+
+            const indicator = document.createElement('div');
+            indicator.className = 'typing-indicator';
+            indicator.innerHTML = '<span></span><span></span><span></span>';
+            inner.appendChild(indicator);
+
+            msgDiv.appendChild(inner);
+            chatMessages.appendChild(msgDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Remove typing indicator
+        function removeTypingIndicator() {
+            const indicator = document.getElementById('typing-indicator');
+            if (indicator) indicator.remove();
+        }
+
+        // Send message
+        function sendMessage() {
+            const message = chatInput.value.trim();
+            if (!message) return;
+
+            // Disable input while processing
+            chatInput.disabled = true;
+            sendBtn.disabled = true;
+
+            // Add user message
+            addMessage(message, true);
+            chatInput.value = '';
+
+            // Show typing indicator
+            addTypingIndicator();
+
+            // Send to server
+            const formData = new FormData();
+            formData.append('id', geminiId);
+            formData.append('action', 'chat');
+            formData.append('message', message);
+            formData.append('sesskey', sesskey);
+
+            fetch('ajax.php', { method: 'POST', body: formData })
+            .then(r => r.json())
+            .then(data => {
+                removeTypingIndicator();
+
+                if (data.success && data.data && data.data.response) {
+                    addMessage(data.data.response, false);
+                } else {
+                    addMessage(data.message || errorMsg, false);
+                }
+            })
+            .catch(err => {
+                removeTypingIndicator();
+                console.error('Chat error:', err);
+                addMessage(errorMsg, false);
+            })
+            .finally(() => {
+                chatInput.disabled = false;
+                sendBtn.disabled = false;
+                chatInput.focus();
+            });
+        }
+
+        // Event listeners
+        sendBtn.addEventListener('click', sendMessage);
+
+        chatInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Clear chat
+        clearBtn.addEventListener('click', function() {
+            const formData = new FormData();
+            formData.append('id', geminiId);
+            formData.append('action', 'chat_clear');
+            formData.append('sesskey', sesskey);
+
+            fetch('ajax.php', { method: 'POST', body: formData })
+            .then(r => r.json())
+            .then(data => {
+                // Reset chat UI
+                chatMessages.innerHTML = '';
+                addMessage(welcomeMsg, false);
+            });
+        });
+    });
+    </script>";
+
 } else {
     // --- TEACHER VIEW (Wizard / Empty State) ---
     // Only teachers can generate content.
@@ -566,7 +1026,14 @@ if ($content) {
                             // Error Logic
                             if (data.data.errors && data.data.errors.length > 0) {
                                 const err = data.data.errors[0];
-                                statusDiv.innerHTML = '<div class=\"alert alert-danger\"><strong>Generation Failed:</strong> ' + (err.errormessage || 'Unknown error') + '</div>';
+                                const errorContainer = document.createElement('div');
+                                errorContainer.className = 'alert alert-danger';
+                                const strong = document.createElement('strong');
+                                strong.textContent = 'Generation Failed:';
+                                errorContainer.appendChild(strong);
+                                errorContainer.appendChild(document.createTextNode(' ' + (err.errormessage || 'Unknown error')));
+                                statusDiv.innerHTML = '';
+                                statusDiv.appendChild(errorContainer);
                                 const btn = document.getElementById('btn-generate');
                                 if(btn) {
                                      btn.disabled = false;
@@ -576,12 +1043,24 @@ if ($content) {
                             }
                             
                             if (data.data.pending_count > 0) {
-                                let html = '<div class=\"alert alert-warning\"><div class=\"spinner-border spinner-border-sm me-2\"></div> Processing tasks in background:<ul>';
+                                const alertDiv = document.createElement('div');
+                                alertDiv.className = 'alert alert-warning';
+                                const spinner = document.createElement('div');
+                                spinner.className = 'spinner-border spinner-border-sm me-2';
+                                alertDiv.appendChild(spinner);
+                                alertDiv.appendChild(document.createTextNode(' Processing tasks in background:'));
+                                const ul = document.createElement('ul');
                                 data.data.tasks.forEach(t => {
-                                    html += '<li>' + t.type + ': ' + (t.status == 1 ? 'Processing...' : 'Queued') + '</li>';
+                                    const li = document.createElement('li');
+                                    li.textContent = t.type + ': ' + (t.status == 1 ? 'Processing...' : 'Queued');
+                                    ul.appendChild(li);
                                 });
-                                html += '</ul><small>You can leave this page. We will notify you when done.</small></div>';
-                                statusDiv.innerHTML = html;
+                                alertDiv.appendChild(ul);
+                                const small = document.createElement('small');
+                                small.textContent = 'You can leave this page. We will notify you when done.';
+                                alertDiv.appendChild(small);
+                                statusDiv.innerHTML = '';
+                                statusDiv.appendChild(alertDiv);
                                 statusDiv.style.display = 'block';
                             } else if (statusDiv.innerHTML.includes('Processing')) {
                                 statusDiv.innerHTML = ''; // Clear if done but not newly completed (e.g. error)
@@ -621,7 +1100,11 @@ if ($content) {
 
                     btn.disabled = true;
                     btn.innerHTML = '" . $str_generating . "';
-                    statusDiv.innerHTML = '<div class=\"alert alert-info\">Enqueuing task...</div>';
+                    const enqueuingDiv = document.createElement('div');
+                    enqueuingDiv.className = 'alert alert-info';
+                    enqueuingDiv.textContent = 'Enqueuing task...';
+                    statusDiv.innerHTML = '';
+                    statusDiv.appendChild(enqueuingDiv);
 
                     const formData = new FormData();
                     formData.append('id', geminiId);
@@ -634,7 +1117,11 @@ if ($content) {
                     .then(r => r.json())
                     .then(data => {
                         if (data.success) {
-                            statusDiv.innerHTML = '<div class=\"alert alert-success\">Task Queued! The system is generating your content in the background.</div>';
+                            const successDiv = document.createElement('div');
+                            successDiv.className = 'alert alert-success';
+                            successDiv.textContent = 'Task Queued! The system is generating your content in the background.';
+                            statusDiv.innerHTML = '';
+                            statusDiv.appendChild(successDiv);
                             btn.disabled = false;
                             btn.innerHTML = '" . $str_generate . "';
                             checkStatus(); // Update UI immediately
@@ -644,7 +1131,11 @@ if ($content) {
                     })
                     .catch(error => {
                         console.error('Error:', error);
-                        statusDiv.innerHTML = '<div class=\"alert alert-danger\">' + '" . $str_error . "' + error.message + '</div>';
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'alert alert-danger';
+                        errorDiv.textContent = '" . $str_error . "' + error.message;
+                        statusDiv.innerHTML = '';
+                        statusDiv.appendChild(errorDiv);
                         btn.disabled = false;
                         btn.innerHTML = '" . $str_generate . "';
                     });

@@ -1,0 +1,17 @@
+# Node modules
+node_modules/
+
+# Build artifacts (AMD modules are built from src/)
+# Note: In Moodle, amd/build/ should be committed, but during development
+# you may want to ignore it and rebuild as needed
+# amd/build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

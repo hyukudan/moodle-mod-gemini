@@ -30,11 +30,19 @@
         <FIELD NAME="config" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Additional configuration for this content"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="version" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="Content version number"/>
+        <FIELD NAME="parent_id" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Parent content ID for version history"/>
+        <FIELD NAME="prompt" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="The prompt used to generate this version"/>
+        <FIELD NAME="is_current" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="Whether this is the current active version"/>
       </FIELDS>
       <KEYS>
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
         <KEY NAME="geminiid" TYPE="foreign" FIELDS="geminiid" REFTABLE="gemini" REFFIELDS="id"/>
       </KEYS>
+      <INDEXES>
+        <INDEX NAME="geminiid_version" UNIQUE="false" FIELDS="geminiid, version"/>
+        <INDEX NAME="geminiid_current" UNIQUE="false" FIELDS="geminiid, is_current"/>
+      </INDEXES>
     </TABLE>
     <TABLE NAME="gemini_queue" COMMENT="Queue for background generation tasks">
       <FIELDS>
@@ -45,6 +53,9 @@
         <FIELD NAME="prompt" TYPE="text" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="status" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="0=Pending, 1=Processing, 2=Done, -1=Error"/>
         <FIELD NAME="errormessage" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="retries" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Number of retry attempts"/>
+        <FIELD NAME="progress" TYPE="int" LENGTH="3" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Progress percentage 0-100"/>
+        <FIELD NAME="progressmsg" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Human-readable progress message"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
       </FIELDS>
@@ -54,6 +65,8 @@
       </KEYS>
       <INDEXES>
         <INDEX NAME="geminiid_status" UNIQUE="false" FIELDS="geminiid, status"/>
+        <INDEX NAME="userid" UNIQUE="false" FIELDS="userid"/>
+        <INDEX NAME="geminiqueue_gemsta_tim_ix" UNIQUE="false" FIELDS="geminiid, status, timemodified"/>
       </INDEXES>
     </TABLE>
   </TABLES>
