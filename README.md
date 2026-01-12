@@ -6,18 +6,18 @@
 
 **Transform Moodle into an AI-powered content factory.**
 
-`mod_gemini` is a next-generation activity module for Moodle that leverages Large Language Models (LLMs) to automatically generate high-quality, multimodal educational resources. Designed for both cloud (Google Gemini) and privacy-first local inference (LM Studio), it empowers educators to create engaging courses in seconds.
+`mod_gemini` is a next-generation activity module for Moodle that leverages Large Language Models (LLMs) like **Google Gemini 3** to automatically generate high-quality, multimodal educational resources. Designed for both cloud (Google Gemini 3.0) and privacy-first local inference (LM Studio), it empowers educators to create engaging courses in seconds.
 
 ---
 
 ## 🌟 Key Features
 
 ### 1. Instant Content Generation
-Stop staring at a blank page. Enter a topic, and let the AI build the resource.
+Stop staring at a blank page. Enter a topic, and let the **Gemini 3** AI build the resource.
 *   **📊 Interactive Presentations:** Generates slide decks complete with structured bullet points, speaker notes, and **AI-generated visual art** (via Pollinations.ai) for every slide.
 *   **🗂️ Gamified Flashcards:** Creates 3D-flippable study cards. Fully integrated with Moodle's **Gradebook**—students receive a grade upon completing the deck.
 *   **🎙️ AI Audio Lessons:** Automatically writes an educational script and synthesizes it into a **high-quality MP3 file** (using OpenAI-compatible TTS) stored securely in Moodle's file system.
-*   **📝 Smart Summaries:** Generates clean, HTML-formatted summaries of complex topics, ready for immediate reading.
+*   **📝 Smart Summaries:** Generates clean, HTML-formatted summaries with automated **AI-Glossary tooltips** powered by Gemini 3.
 *   **❓ Quiz Generator (Moodle XML):** The "killer feature" for assessment. Generates a bank of multiple-choice questions in standard **Moodle XML** format, ready to be imported directly into your Question Bank.
 
 ### 2. Teacher Productivity Toolkit
@@ -27,7 +27,7 @@ We don't just generate content; we give you tools to manage it.
 *   **🔄 Regenerate & Reset:** Not happy with the output? Wipe the slate clean and try a new prompt instantly.
 
 ### 3. Enterprise & Local Ready
-*   **Google Gemini Native:** Built to use Google's latest models for speed and quality.
+*   **Google Gemini 3 Native:** Built to use Google's latest **Gemini 3.0** models for state-of-the-art speed and pedagogical intelligence.
 *   **LM Studio / Local LLM Support:** Fully configurable API endpoints allow you to point this plugin at your own local inference server (e.g., `localhost:1234`). Keep your data on-premise.
 
 ---
@@ -37,13 +37,13 @@ We don't just generate content; we give you tools to manage it.
 ### Prerequisites
 *   Moodle 4.4 or higher (Compatible with Moodle 5.1).
 *   PHP 8.1+.
-*   An API Key (Google Gemini) OR a running instance of LM Studio/Ollama.
+*   An API Key (Google Gemini 3) OR a running instance of LM Studio/Ollama.
 
 ### Step-by-Step
 1.  **Download:** Clone this repository into your Moodle's `mod` directory:
     ```bash
     cd /path/to/moodle/mod
-    git clone https://github.com/scergioc/moodle-mod-gemini.git gemini
+    git clone https://github.com/hyukudan/moodle-mod-gemini.git gemini
     ```
 2.  **Install:** Log in to your Moodle site as an Administrator. Moodle will detect the new plugin and prompt you to install it.
 3.  **Configure:** Go to **Site Administration > Plugins > Activity Modules > Gemini AI Content**.
@@ -57,7 +57,7 @@ We don't just generate content; we give you tools to manage it.
 *   **Base URL:**
     *   **Google Gemini:** `https://generativelanguage.googleapis.com/v1beta/openai/`
     *   **Local (LM Studio):** `http://localhost:1234/v1/`
-*   **Model Name:** The model ID to target (e.g., `gemini-1.5-flash`, `llama-3-8b-instruct`).
+*   **Model Name:** The model ID to target (e.g., `gemini-3.0-flash`, `llama-3-8b-instruct`).
 
 ### Text-to-Speech (Audio)
 *   **TTS URL:** Endpoint for audio generation. Defaults to the Base URL + `audio/speech`.

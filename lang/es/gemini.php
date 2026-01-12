@@ -14,7 +14,7 @@ $string['settings_apikey_desc'] = 'Introduce tu Clave API (Google Gemini o compa
 $string['settings_baseurl'] = 'URL Base';
 $string['settings_baseurl_desc'] = 'La URL del endpoint de la API. Para Gemini (compatibilidad OpenAI): "https://generativelanguage.googleapis.com/v1beta/openai/". Para LM Studio: "http://localhost:1234/v1".';
 $string['settings_model'] = 'Nombre del Modelo';
-$string['settings_model_desc'] = 'El ID del modelo a utilizar. Ej: "gemini-1.5-flash", "gpt-4", "llama-3-8b-instruct".';
+$string['settings_model_desc'] = 'El ID del modelo a utilizar. Ej: "gemini-3.0-flash", "gemini-1.5-pro", "llama-3-8b-instruct".';
 $string['settings_temperature'] = 'Temperatura';
 $string['settings_temperature_desc'] = 'Nivel de creatividad (0.0 a 1.0).';
 
