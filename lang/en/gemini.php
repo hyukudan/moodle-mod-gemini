@@ -17,3 +17,30 @@ $string['settings_model'] = 'Model Name';
 $string['settings_model_desc'] = 'The model ID to use. E.g., "gemini-1.5-flash", "gpt-4", "llama-3-8b-instruct".';
 $string['settings_temperature'] = 'Temperature';
 $string['settings_temperature_desc'] = 'Creativity level (0.0 to 1.0).';
+
+// UI Strings
+$string['teacher_controls'] = '🔧 Teacher Controls';
+$string['generate_rubric'] = '💡 Generate Rubric';
+$string['edit_content'] = '✏️ Edit Content';
+$string['regenerate'] = '🔄 Regenerate (Reset)';
+$string['regenerate_confirm'] = 'Are you sure? This will DELETE the current content permanently.';
+$string['ai_teaching_assistant'] = '🤖 AI Teaching Assistant';
+$string['create_rubric'] = '📊 Create Assessment Rubric';
+$string['thinking'] = 'Thinking...';
+$string['close'] = 'Close';
+$string['save_changes'] = 'Save Changes';
+$string['saving'] = 'Saving...';
+$string['edit_modal_title'] = 'Edit Generated Content';
+$string['edit_modal_help'] = 'Edit the raw content below. For Presentations/Flashcards, ensure JSON validity.';
+$string['no_content_yet'] = 'No content generated yet. Use the wizard below to create it.';
+$string['content_creator'] = 'Gemini Content Creator';
+$string['generate_btn'] = '✨ Generate with Gemini';
+$string['generating_msg'] = 'Generating... (this may take a minute)';
+$string['contacting_msg'] = 'Contacting Gemini... Do not close this page.';
+$string['success_reload'] = 'Content generated successfully! Reloading...';
+$string['error_prefix'] = 'Error: ';
+$string['enter_topic'] = 'Please enter a topic.';
+$string['configure_type'] = 'Configure your {$a}'; // {$a} will be replaced by type name
+$string['topic_prompt'] = 'Topic / Prompt';
+$string['topic_placeholder'] = 'E.g., The history of the Roman Empire...';
+

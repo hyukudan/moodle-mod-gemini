@@ -35,12 +35,13 @@ echo $OUTPUT->header();
 if ($content) {
     // --- TEACHER CONTROL PANEL ---
     if (has_capability('moodle/course:manageactivities', $context)) {
+        echo '<div class="card mb-4 border-warning">';
         echo '<div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">';
-        echo '<strong>🔧 Teacher Controls</strong>';
+        echo '<strong>' . get_string('teacher_controls', 'mod_gemini') . '</strong>';
         echo '<div>';
-        echo '<button class="btn btn-sm btn-dark me-2" id="btn-tools-rubric">💡 Generate Rubric</button>';
-        echo '<button class="btn btn-sm btn-light me-2" id="btn-edit-content">✏️ Edit Content</button>';
-        echo '<button class="btn btn-sm btn-danger" id="btn-regenerate">🔄 Regenerate (Reset)</button>';
+        echo '<button class="btn btn-sm btn-dark me-2" id="btn-tools-rubric">' . get_string('generate_rubric', 'mod_gemini') . '</button>';
+        echo '<button class="btn btn-sm btn-light me-2" id="btn-edit-content">' . get_string('edit_content', 'mod_gemini') . '</button>';
+        echo '<button class="btn btn-sm btn-danger" id="btn-regenerate">' . get_string('regenerate', 'mod_gemini') . '</button>';
         echo '</div>';
         echo '</div>';
         echo '</div>';
@@ -51,21 +52,21 @@ if ($content) {
           <div class="modal-dialog modal-lg">
             <div class="modal-content">
               <div class="modal-header bg-info text-white">
-                <h5 class="modal-title">🤖 AI Teaching Assistant</h5>
+                <h5 class="modal-title">' . get_string('ai_teaching_assistant', 'mod_gemini') . '</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
               </div>
               <div class="modal-body">
                 <div class="text-center mb-3">
-                    <button class="btn btn-outline-primary" id="btn-do-rubric">📊 Create Assessment Rubric</button>
+                    <button class="btn btn-outline-primary" id="btn-do-rubric">' . get_string('create_rubric', 'mod_gemini') . '</button>
                     <!-- Future tools: <button class="btn btn-outline-success">Suggested Activities</button> -->
                 </div>
                 <div id="tool-output" class="border p-3 rounded bg-light" style="min-height:200px; display:none;"></div>
                 <div id="tool-loading" class="text-center p-3" style="display:none;">
-                    <div class="spinner-border text-primary" role="status"></div><br>Thinking...
+                    <div class="spinner-border text-primary" role="status"></div><br>' . get_string('thinking', 'mod_gemini') . '
                 </div>
               </div>
               <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">' . get_string('close', 'mod_gemini') . '</button>
               </div>
             </div>
           </div>
@@ -76,8 +77,22 @@ if ($content) {
         <div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
           <div class="modal-dialog modal-lg">
             <div class="modal-content">
-        ... (rest of edit modal code hidden for brevity in this replace block, kept in actual file) ...
-        ';
+              <div class="modal-header">
+                <h5 class="modal-title">' . get_string('edit_modal_title', 'mod_gemini') . '</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body">
+                <p class="small text-muted">' . get_string('edit_modal_help', 'mod_gemini') . '</p>
+                <textarea class="form-control font-monospace" id="edit-content-area" rows="15"></textarea>
+                <div id="edit-error" class="text-danger mt-2"></div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">' . get_string('close', 'mod_gemini') . '</button>
+                <button type="button" class="btn btn-primary" id="btn-save-edit">' . get_string('save_changes', 'mod_gemini') . '</button>
+              </div>
+            </div>
+          </div>
+        </div>';
 
         // Control Panel JS
         echo "<script>
@@ -315,10 +330,11 @@ if ($content) {
                         nextBtn.innerText = 'Saving...';
                         
                         const formData = new FormData();
-                        formData.append('id', <?php echo $cm->id; ?>); // CMID
+                        formData.append('id', <?php echo $gemini->id; ?>); // Instance ID for ajax.php logic (Note: ajax.php uses instance ID 'id', not cmid)
+                        formData.append('action', 'grade_completion');
                         formData.append('sesskey', M.cfg.sesskey);
                         
-                        fetch('grade.php', { method: 'POST', body: formData })
+                        fetch('ajax.php', { method: 'POST', body: formData })
                         .then(r => r.json())
                         .then(d => {
                              alert('Deck finished! Grade recorded: 100%');
@@ -419,8 +435,8 @@ if ($content) {
     // --- TEACHER VIEW (Wizard / Empty State) ---
     // Only teachers can generate content.
     if (has_capability('moodle/course:manageactivities', $context)) {
-        echo $OUTPUT->heading('Gemini Content Creator');
-        echo '<div class="alert alert-info">No content generated yet. Use the wizard below to create it.</div>';
+        echo $OUTPUT->heading(get_string('content_creator', 'mod_gemini'));
+        echo '<div class="alert alert-info">' . get_string('no_content_yet', 'mod_gemini') . '</div>';
         
         // We will load the Wizard UI (Vue/React or Vanilla JS) here.
         // For now, a placeholder UI.
@@ -448,20 +464,30 @@ if ($content) {
         echo '</div>'; // row
 
         // Container for the generation form (hidden initially via JS)
+        $str_topic = get_string('topic_prompt', 'mod_gemini');
+        $str_placeholder = get_string('topic_placeholder', 'mod_gemini');
+        $str_generate = get_string('generate_btn', 'mod_gemini');
+
         echo '<div id="gemini-generation-form" class="mt-4 p-4 bg-light border rounded" style="display:none;">';
-        echo '<h4>Configure your <span id="selected-type-name"></span></h4>';
+        echo '<h4>' . get_string('configure_type', 'mod_gemini', '<span id="selected-type-name"></span>') . '</h4>';
         echo '<form id="gemini-generate-form">';
         echo '<input type="hidden" name="type" id="input-type">';
         echo '<div class="mb-3">';
-        echo '<label class="form-label">Topic / Prompt</label>';
-        echo '<textarea class="form-control" name="prompt" rows="3" placeholder="E.g., The history of the Roman Empire..."></textarea>';
+        echo '<label class="form-label">' . $str_topic . '</label>';
+        echo '<textarea class="form-control" name="prompt" rows="3" placeholder="' . $str_placeholder . '"></textarea>';
         echo '</div>';
-        echo '<button type="button" class="btn btn-primary" id="btn-generate">✨ Generate with Gemini</button>';
+        echo '<button type="button" class="btn btn-primary" id="btn-generate">' . $str_generate . '</button>';
         echo '</form>';
         echo '<div id="generation-status" class="mt-3"></div>';
         echo '</div>';
 
         // Add some basic JS for the prototype wizard
+        $str_generating = get_string('generating_msg', 'mod_gemini');
+        $str_contacting = get_string('contacting_msg', 'mod_gemini');
+        $str_success = get_string('success_reload', 'mod_gemini');
+        $str_error = get_string('error_prefix', 'mod_gemini');
+        $str_enter_topic = get_string('enter_topic', 'mod_gemini');
+
         echo "<script>
             document.addEventListener('DOMContentLoaded', function() {
                 const cards = document.querySelectorAll('.gemini-type-card');
@@ -495,14 +521,14 @@ if ($content) {
                     const statusDiv = document.getElementById('generation-status');
                     
                     if (!prompt.trim()) {
-                        alert('Please enter a topic.');
+                        alert('" . $str_enter_topic . "');
                         return;
                     }
 
                     // UI Loading State
                     btn.disabled = true;
-                    btn.innerHTML = '<span class=\"spinner-border spinner-border-sm\" role=\"status\" aria-hidden=\"true\"></span> Generating... (this may take a minute)';
-                    statusDiv.innerHTML = '<div class=\"alert alert-info\">Contacting Gemini... Do not close this page.</div>';
+                    btn.innerHTML = '<span class=\"spinner-border spinner-border-sm\" role=\"status\" aria-hidden=\"true\"></span> ' + '" . $str_generating . "';
+                    statusDiv.innerHTML = '<div class=\"alert alert-info\">' + '" . $str_contacting . "' + '</div>';
 
                     // AJAX Request
                     const sesskey = M.cfg.sesskey;
@@ -522,7 +548,7 @@ if ($content) {
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            statusDiv.innerHTML = '<div class=\"alert alert-success\">Content generated successfully! Reloading...</div>';
+                            statusDiv.innerHTML = '<div class=\"alert alert-success\">' + '" . $str_success . "' + '</div>';
                             setTimeout(() => {
                                 window.location.reload();
                             }, 1000);
@@ -532,9 +558,9 @@ if ($content) {
                     })
                     .catch(error => {
                         console.error('Error:', error);
-                        statusDiv.innerHTML = '<div class=\"alert alert-danger\">Error: ' + error.message + '</div>';
+                        statusDiv.innerHTML = '<div class=\"alert alert-danger\">' + '" . $str_error . "' + error.message + '</div>';
                         btn.disabled = false;
-                        btn.innerHTML = '✨ Generate with Gemini';
+                        btn.innerHTML = '" . $str_generate . "';
                     });
                 });
             });

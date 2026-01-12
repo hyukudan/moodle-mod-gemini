@@ -193,6 +193,21 @@ try {
         
         $response['success'] = true;
         $response['data'] = ['html' => $rubric_html];
+        
+    } elseif ($action === 'grade_completion') {
+        // Student Action: Mark activity as completed/graded
+        // Security check: Any student who can view can trigger this if they finish the task
+        require_capability('mod/gemini:view', $context);
+
+        $grade = new stdClass();
+        $grade->userid = $USER->id;
+        $grade->rawgrade = 100; // Full marks
+        $grade->feedback = 'Completed via Flashcards';
+        
+        gemini_update_grades($gemini, $USER->id, $grade);
+        
+        $response['success'] = true;
+        $response['message'] = 'Grade recorded';
     }
 
 } catch (Exception $e) {
